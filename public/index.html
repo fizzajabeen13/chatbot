@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fizza's chatbot</title>
+  <style>
+    :root{
+      --bg:#f2f4f8; --card:#ffffff; --primary:#0b63ff; --text:#0b1a2b;
+      --muted:#6b7280;
+    }
+    [data-theme="dark"]{
+      --bg:#0b1220; --card:#071029; --primary:#4f8cff; --text:#e6eefb; --muted:#9aa8c2;
+    }
+    html,body{height:100%; margin:0; font-family:Inter, system-ui, Arial; background:linear-gradient(180deg, rgba(11,99,255,0.06), transparent), var(--bg);}
+    .app{max-width:900px; margin:28px auto; display:grid; grid-template-rows:auto 1fr auto; gap:16px; height:calc(100vh - 56px);}
+    header{display:flex; align-items:center; justify-content:space-between;}
+    .brand{display:flex; gap:12px; align-items:center;}
+    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--primary),#7b61ff); box-shadow:0 6px 18px rgba(11,63,129,0.12);}
+    h1{margin:0;font-size:18px;color:var(--text);}
+    .controls{display:flex;gap:8px;align-items:center;}
+    button{background:var(--card);border:1px solid rgba(0,0,0,0.06);padding:8px 12px;border-radius:8px;cursor:pointer;color:var(--text);}
+    .new-chat{background:linear-gradient(90deg,var(--primary),#7b61ff); color:white; border:none;padding:8px 14px;}
+    main.chat{background:transparent; border-radius:18px; padding:18px; overflow:auto; box-shadow:0 6px 30px rgba(2,6,23,0.06);}
+    .messages{display:flex;flex-direction:column;gap:12px;max-height:100%;padding-bottom:20px;}
+    .msg{max-width:78%; padding:12px 14px; border-radius:12px; line-height:1.4;}
+    .user{align-self:flex-end;background:linear-gradient(90deg,var(--primary),#7b61ff); color:white;border-bottom-right-radius:4px;}
+    .bot{align-self:flex-start;background:var(--card); color:var(--text); border-bottom-left-radius:4px;}
+    footer{display:flex;gap:8px;align-items:center;padding:12px;background:var(--card);border-radius:12px;}
+    .input{flex:1; display:flex; gap:8px; align-items:center; padding:6px; border-radius:10px; background:rgba(0,0,0,0.03)}
+    input[type="text"]{flex:1;border:none;background:transparent;padding:8px;font-size:15px;color:var(--text); outline:none;}
+    .small{font-size:13px;color:var(--muted);}
+    .micro{width:40px;height:40px;border-radius:10px;border:none;display:grid;place-items:center;cursor:pointer;}
+    .meta{display:flex;gap:8px;align-items:center}
+    .bg-decor{position:fixed; right:-120px; top:20vh; width:420px; height:420px; filter:blur(42px); opacity:0.14; background:linear-gradient(180deg,var(--primary),#7b61ff); border-radius:50%;}
+  </style>
+</head>
+<body data-theme="light">
+  <div class="bg-decor" aria-hidden></div>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden></div>
+        <div>
+          <h1>Fizza's Chatbot</h1>
+          <div class="small">Brains with a spark of fun!</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="newChat" class="new-chat">New Chat</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label class="small" for="themeToggle">Dark</label>
+          <input id="themeToggle" type="checkbox" aria-label="toggle theme"/>
+        </div>
+      </div>
+    </header>
+
+    <main class="chat" id="chatMain">
+      <div class="messages" id="messages"></div>
+    </main>
+
+    <footer>
+      <div class="meta">
+        <button id="micBtn" class="micro">🎤</button>
+      </div>
+
+      <div class="input" id="inputWrap">
+        <input id="textInput" type="text" placeholder="Type a message — press Enter to send" />
+        <button id="sendBtn">Send</button>
+      </div>
+
+      <div style="width:6px"></div>
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Config ----------
+    const API_BASE = "/api"; // server endpoint
+    const MODEL = "your-model (server uses .env MODEL)";
+
+    // ---------- UI ----------
+    const messagesEl = document.getElementById("messages");
+    const textInput = document.getElementById("textInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const micBtn = document.getElementById("micBtn");
+    const newChatBtn = document.getElementById("newChat");
+    const themeToggle = document.getElementById("themeToggle");
+    const body = document.body;
+
+    // Chat state
+    let conversation = []; // each: {role: 'user'|'system'|'assistant', text: '...'}
+    function appendMessage(role, text){
+      const d = document.createElement("div");
+      d.className = "msg " + (role === "user" ? "user" : "bot");
+      d.innerHTML = text;
+      messagesEl.appendChild(d);
+      messagesEl.parentElement.scrollTop = messagesEl.parentElement.scrollHeight;
+    }
+
+    async function sendMessage(text){
+      if(!text || !text.trim()) return;
+      appendMessage("user", text);
+      conversation.push({role:"user", text});
+      textInput.value = "";
+      // show a temporary "typing" message
+      const loadingId = "loading-" + Date.now();
+      const loadingEl = document.createElement("div");
+      loadingEl.className = "msg bot";
+      loadingEl.id = loadingId;
+      loadingEl.innerText = "Thinking...";
+      messagesEl.appendChild(loadingEl);
+      messagesEl.parentElement.scrollTop = messagesEl.parentElement.scrollHeight;
+
+      try {
+        const resp = await fetch(API_BASE + "/chat", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({ messages: conversation })
+        });
+        const data = await resp.json();
+        document.getElementById(loadingId)?.remove();
+        const botText = data?.reply ?? JSON.stringify(data);
+        appendMessage("bot", botText);
+        conversation.push({role:"assistant", text: botText});
+        // Speak it (TTS)
+        speak(botText);
+      } catch (err) {
+        document.getElementById(loadingId)?.remove();
+        appendMessage("bot", "Error: " + (err.message || err));
+      }
+    }
+    // Enter to send
+    textInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendMessage(textInput.value);
+      }
+    });
+    sendBtn.addEventListener("click", () => sendMessage(textInput.value));
+
+    // New chat
+    newChatBtn.addEventListener("click", () => {
+      conversation = [];
+      messagesEl.innerHTML = "";
+      appendMessage("bot","New chat started. Ask me anything!");
+    });
+
+    // Theme toggle
+    themeToggle.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        body.setAttribute("data-theme", "dark");
+      } else {
+        body.setAttribute("data-theme", "light");
+      }
+    });
+
+    // ---------- Voice (speech recognition & TTS) ----------
+    let recognition, recognizing = false;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.addEventListener("start", () => {
+        recognizing = true;
+        micBtn.innerText = "🔴";
+        micBtn.style.transform = "scale(1.04)";
+      });
+
+      recognition.addEventListener("end", () => {
+        recognizing = false;
+        micBtn.innerText = "🎤";
+        micBtn.style.transform = "scale(1)";
+      });
+
+      recognition.addEventListener("result", (e) => {
+        const text = e.results[0][0].transcript;
+        sendMessage(text);
+      });
+
+      micBtn.addEventListener("click", () => {
+        if (recognizing) {
+          recognition.stop();
+        } else {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.warn("speech start error", err);
+          }
+        }
+      });
+    } else {
+      micBtn.disabled = true;
+      micBtn.title = "SpeechRecognition not supported in this browser.";
+    }
+
+    // Basic TTS
+    function speak(text) {
+      if (!("speechSynthesis" in window)) return;
+      try {
+        const utter = new SpeechSynthesisUtterance(String(text));
+        utter.lang = "en-US";
+        speechSynthesis.cancel();
+        speechSynthesis.speak(utter);
+      } catch (e) {
+        console.warn("TTS failed", e);
+      }
+    }
+
+    // Initial welcome
+    appendMessage("bot", "Hello! I am your chatbot. Click 🎤 to speak, or type a message. Toggle Dark to switch theme.");
+  </script>
+</body>
+</html>
