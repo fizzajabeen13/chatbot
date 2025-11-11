@@ -1,5 +1,6 @@
 async function sendMessage(messages) {
-  const resp = await fetch('/api/chat', {
+  const resp = await fetch('/.netlify/functions/chat', {
+
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages })
