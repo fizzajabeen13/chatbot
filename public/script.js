@@ -1,10 +1,10 @@
 async function sendMessage(messages) {
-  const resp = await fetch('/.netlify/functions/chat', {
+ const resp = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ messages })
+});
 
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages })
-  });
   const data = await resp.json();
 
   // Make sure we have a valid reply
