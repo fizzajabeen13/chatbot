@@ -2,9 +2,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-dotenv.config(); // load .env
+// ✅ Load environment variables
+dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -23,7 +26,16 @@ const model = genAI.getGenerativeModel({ model: MODEL });
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public")); // frontend files
+
+// ✅ Static frontend path setup
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public"))); // serve frontend files
+
+// ✅ Serve index.html for root route
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // ✅ Simple /chat route (single message)
 app.post("/chat", async (req, res) => {
@@ -34,15 +46,14 @@ app.post("/chat", async (req, res) => {
     const result = await model.generateContent(message);
     let reply = result?.response?.text() || "";
 
-    // Try to extract actual text if the model returns JSON-like data
+    // Try to extract text if it's JSON-like
     try {
       const parsed = JSON.parse(reply);
       if (parsed.reply) reply = parsed.reply;
     } catch {
-      // ignore if not valid JSON
+      // ignore non-JSON
     }
 
-    // Clean escape sequences like \n, \"
     reply = reply
       .replace(/\\n/g, "\n")
       .replace(/\\"/g, '"')
@@ -55,7 +66,7 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-// ✅ Multi-message chat (if your frontend sends conversation history)
+// ✅ Multi-message chat (conversation)
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages } = req.body;
@@ -70,7 +81,7 @@ app.post("/api/chat", async (req, res) => {
     const result = await model.generateContent({ contents });
     let reply = result.response.text().trim();
 
-    // 🧹 Clean step 1: if it's a JSON string like {"reply":"hi"}
+    // Clean reply if JSON-like
     try {
       const parsed = JSON.parse(reply);
       if (parsed && typeof parsed === "object") {
@@ -82,10 +93,9 @@ app.post("/api/chat", async (req, res) => {
       // Not JSON, ignore
     }
 
-    // 🧹 Clean step 2: remove leftover braces/quotes if any
     reply = reply
-      .replace(/^[{\[]+|[}\]]+$/g, "") // remove starting/ending braces/brackets
-      .replace(/^"|"$/g, "")           // remove wrapping quotes
+      .replace(/^[{\[]+|[}\]]+$/g, "")
+      .replace(/^"|"$/g, "")
       .replace(/\\n/g, "\n")
       .replace(/\\"/g, '"')
       .replace(/\\\\/g, "\\")
@@ -100,4 +110,3 @@ app.post("/api/chat", async (req, res) => {
 
 // ✅ Start server
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
-
