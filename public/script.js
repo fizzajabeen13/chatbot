@@ -1,20 +1,15 @@
-async function sendMessage(messages) {
-const resp = await fetch('/.netlify/functions/chat', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ messages })
-});
+async function sendMessage(message) {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message })
+  });
 
+  const data = await res.json();
+  const reply = data.reply || "No reply";
 
-
-  const data = await resp.json();
-  let reply = data.reply || "";
-
-  reply = reply
-    .replace(/\\n/g, "<br>")
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, "\\")
-    .trim();
-
-  addMessage("bot", reply);
+  document.querySelector("#chat").innerHTML += `
+    <div class="user">You: ${message}</div>
+    <div class="bot">Bot: ${reply}</div>
+  `;
 }
