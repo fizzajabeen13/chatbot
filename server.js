@@ -1,3 +1,6 @@
+
+console.log("GEMINI_API_KEY loaded?", !!process.env.GEMINI_API_KEY);
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
